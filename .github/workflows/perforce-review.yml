@@ -1,0 +1,62 @@
+name: Perforce Code Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      changelist:
+        description: "Perforce changelist number to review (leave empty for default/opened)"
+        required: false
+        default: ""
+      output_format:
+        description: "Output format (text, json, markdown)"
+        required: false
+        default: "text"
+      fail_on_findings:
+        description: "Fail the workflow if error-level findings are found"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+jobs:
+  review:
+    name: Review Perforce changelist
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Perforce CLI (p4)
+        run: |
+          curl -sSL https://package.perforce.com/perforce.pubkey | sudo gpg --dearmor -o /usr/share/keyrings/perforce.gpg
+          echo "deb [signed-by=/usr/share/keyrings/perforce.gpg] https://package.perforce.com/apt/ubuntu focal release" \
+            | sudo tee /etc/apt/sources.list.d/perforce.list
+          sudo apt-get update -q
+          sudo apt-get install -y helix-cli
+
+      - name: Install review agent
+        run: pip install -e .
+
+      - name: Run Perforce code review
+        env:
+          P4PORT: ${{ secrets.P4PORT }}
+          P4USER: ${{ secrets.P4USER }}
+          P4CLIENT: ${{ secrets.P4CLIENT }}
+          P4PASSWD: ${{ secrets.P4PASSWD }}
+          P4_CHANGELIST: ${{ github.event.inputs.changelist }}
+          REVIEW_OUTPUT_FORMAT: ${{ github.event.inputs.output_format }}
+          REVIEW_FAIL_ON_FINDINGS: ${{ github.event.inputs.fail_on_findings }}
+          AGENT_VERBOSE: "true"
+        run: |
+          perforce-review-agent \
+            ${{ github.event.inputs.changelist != '' && format('--changelist {0}', github.event.inputs.changelist) || '' }} \
+            --format "${{ github.event.inputs.output_format }}" \
+            ${{ github.event.inputs.fail_on_findings == 'true' && '--fail-on-findings' || '' }}
