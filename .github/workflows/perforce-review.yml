@@ -24,6 +24,8 @@ jobs:
   review:
     name: Review Perforce changelist
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Check out repository
